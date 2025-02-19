@@ -18,6 +18,7 @@ def MySniff():
     #################################
     ###### start of your code #######
     #################################
+    # Sniff for 5
     packets = sniff(timeout=5)
     wrpcap(Trace1, packets)
     #################################
@@ -51,7 +52,9 @@ def Q2():
     #################################
     ###### start of your code #######
     #################################
+    # Read pcap
     packets = rdpcap(Trace1)
+    # Iterate all packets
     for p in packets:
         if TCP in p and p[TCP].dport == 80:
             src_mac = p[Ether].src
@@ -70,7 +73,9 @@ def Q3():
     #################################
     ###### start of your code #######
     #################################
+    # Read pcap
     packets = rdpcap(Trace1)
+    # Iteerate all packets
     for p in packets:
         if TCP in p and p[TCP].dport == 80:
             theType = p[Ether].type
@@ -109,6 +114,7 @@ def Q5():
     ###### start of your code #######
     #################################
     packets = rdpcap(Trace2)
+    # Iterate all packets
     for p in packets:
         if TCP in p:
             num_tcp += 1
@@ -127,12 +133,14 @@ def Q6():
     ###### start of your code #######
     #################################
     packets = rdpcap(Trace2)
+    # Filter all TCP
     tcp_packets = [p for p in packets if TCP in p]
     for p in tcp_packets:
         n0 = (p[IP].src, p[TCP].sport)
         n1 = (p[IP].dst, p[TCP].dport)
         s0 = (n0, n1)
         s1 = (n1, n0)
+        # Both situation
         if s0 not in flows and s1 not in flows:
             flows.add(s0)
     #################################
@@ -148,11 +156,14 @@ def Q7():
     ###### start of your code #######
     #################################
     packets = rdpcap(Trace2)
+    # Filter all IP
     ip_packets = [p for p in packets if IP in p]
-    lens = sorted(list(map(lambda p: p[IP].len + 16, ip_packets)))
+    # Sort with ans
+    lens = sorted(list(map(lambda p: p[IP].len + 18, ip_packets)))
     n = len(ip_packets)
     min_length = lens[0]
     max_length = lens[-1]
+    # Calc median
     if n % 2 == 1:
         median_length = lens[n // 2]
     else:

@@ -73,6 +73,7 @@ def Q3():
     #################################
     ###### start of your code #######
     #################################
+    timestamp = 0
     # Read pcap
     packets = rdpcap(Trace1)
     # Iteerate all packets
@@ -80,11 +81,12 @@ def Q3():
         if TCP in p and p[TCP].dport == 80:
             theType = p[Ether].type
             theProto = p[IP].proto
+            timestamp = p.time
             break
     #################################
     ###### end of your code #########
     #################################
-    return theType, theProto
+    return theType, theProto, timestamp
             
 
 

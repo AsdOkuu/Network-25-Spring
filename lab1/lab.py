@@ -18,7 +18,7 @@ def MySniff():
     #################################
     ###### start of your code #######
     #################################
-    # Sniff for 5
+    # Sniff for 5 secs
     packets = sniff(timeout=5)
     wrpcap(Trace1, packets)
     #################################

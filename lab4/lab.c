@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "common.h"
 #include <stdio.h>
 #include <string.h>
@@ -198,16 +199,47 @@ void Switch(){
          
         // Get Ethernet header
 
+        uint8_t dest_mac[6];
+        fdb_entry_t fdb_entry;
+        for(int i = 0; i < 6; i++) {
+            dest_mac[i] = entry->data[i];
+            fdb_entry.mac[i] = entry->data[6 + i];
+        }
+        strcpy(fdb_entry.device, entry->device->name);
         
         // Learn source MAC address
 
+        fdb.entries[fdb.count++] = fdb_entry;
         
         // Forward packet
     
             // case 1: Found destination, forward to that device
+        int succ = 0;
+        for(int i = 0; i < fdb.count; i++) {
+            int flag = 1;
+            for(int j = 0; j < 6; j++) {
+                flag &= (dest_mac[j] == fdb.entries[i].mac[j]);
+            }
+            if(flag) {
+                for(int j = 0; j < device_count; j++) {
+                    if(strncmp(devices[j].name, fdb.entries[i].device, 31) == 0) {
+                        send_packet(&devices[j], entry->data, entry->len);
+                        break;
+                    }
+                }
+                succ = 1;
+                break;
+            }
+        }
 
                 
             // case 2: Flood to all ports except ingress
+        if(!succ) {
+            for(int i = 0; i < device_count; i++) {
+                if(&devices[i] == entry->device) continue;
+                send_packet(&devices[i], entry->data, entry->len);
+            }
+        }
         
         /*************************************
          * end of your code

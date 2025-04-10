@@ -44,8 +44,9 @@ test_hub:
 	docker exec -dit host2 bash -c "tcpdump -i host2-eth0 -ne -v > test_hub_host2.log"
 	sleep 1
 	docker exec -it host1 bash -c "ping 10.0.0.4 -c 3 > test_hub_host1.log"
-	docker exec device bash -c "killall $(TARGET)"
-	docker exec host2 bash -c "killall tcpdump"
+	sleep 1
+	docker exec device bash -c "pkill $(TARGET)"
+	docker exec host2 bash -c "pkill tcpdump"
 	docker cp host2:/test_hub_host2.log .
 	docker cp host1:/test_hub_host1.log . 
 	@echo "================================================"

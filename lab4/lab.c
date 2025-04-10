@@ -154,8 +154,9 @@ void Hub() {
         /*************************************
          * start of your code
          *************************************/
-         
-        
+        for(int i = 0; i < device_count; i++) {
+            send_packet(&devices[i], entry->data, entry->len);
+        }
         /*************************************
          * end of your code
          *************************************/

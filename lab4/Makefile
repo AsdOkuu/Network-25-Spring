@@ -95,15 +95,26 @@ test_router:
 	docker exec -dit device2 bash -c "./$(TARGET) device2 router"
 	docker exec -dit device3 bash -c "./$(TARGET) device3 router"
 	docker exec -dit device4 bash -c "./$(TARGET) device4 router"
-	docker exec -it host1 bash -c "ping 10.0.5.2 -c 5"
+	docker exec -it host1 bash -c "ping 10.0.5.2 -i 2 -c 5"
 	sleep 1
-	docker exec device1 bash -c "killall $(TARGET)"
-	docker exec device2 bash -c "killall $(TARGET)"
-	docker exec device3 bash -c "killall $(TARGET)"
-	docker exec device4 bash -c "killall $(TARGET)"
+	docker exec device1 bash -c "pkill $(TARGET)"
+	docker exec device2 bash -c "pkill $(TARGET)"
+	docker exec device3 bash -c "pkill $(TARGET)"
+	docker exec device4 bash -c "pkill $(TARGET)"
 	@echo "================================================"
 	@echo "It takes 3 seconds to propagate routing entry to all routers."
 	@echo "So about 3 pings should fail, and the remaining should work."
+	
+
+test_sustain:
+	docker cp $(TARGET) device1:/$(TARGET)
+	docker cp $(TARGET) device2:/$(TARGET)
+	docker cp $(TARGET) device3:/$(TARGET)
+	docker cp $(TARGET) device4:/$(TARGET)
+	docker exec -dit device1 bash -c "./$(TARGET) device1 router"
+	docker exec -dit device2 bash -c "./$(TARGET) device2 router"
+	docker exec -dit device3 bash -c "./$(TARGET) device3 router"
+	docker exec -dit device4 bash -c "./$(TARGET) device4 router"
 	
 
 .PHONY: all clean

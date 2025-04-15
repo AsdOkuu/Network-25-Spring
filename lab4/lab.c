@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdlib.h>
+#include <assert.h>
 #include "common.h"
 #include <stdio.h>
 #include <string.h>
@@ -154,8 +155,10 @@ void Hub() {
         /*************************************
          * start of your code
          *************************************/
-         
-        
+        for(int i = 0; i < device_count; i++) {
+            if(&devices[i] == entry->device) continue;
+            send_packet(&devices[i], entry->data, entry->len);
+        }
         /*************************************
          * end of your code
          *************************************/
@@ -196,16 +199,47 @@ void Switch(){
          
         // Get Ethernet header
 
+        uint8_t dest_mac[6];
+        fdb_entry_t fdb_entry;
+        for(int i = 0; i < 6; i++) {
+            dest_mac[i] = entry->data[i];
+            fdb_entry.mac[i] = entry->data[6 + i];
+        }
+        strcpy(fdb_entry.device, entry->device->name);
         
         // Learn source MAC address
 
+        fdb.entries[fdb.count++] = fdb_entry;
         
         // Forward packet
     
             // case 1: Found destination, forward to that device
+        int succ = 0;
+        for(int i = 0; i < fdb.count; i++) {
+            int flag = 1;
+            for(int j = 0; j < 6; j++) {
+                flag &= (dest_mac[j] == fdb.entries[i].mac[j]);
+            }
+            if(flag) {
+                for(int j = 0; j < device_count; j++) {
+                    if(strncmp(devices[j].name, fdb.entries[i].device, 31) == 0) {
+                        send_packet(&devices[j], entry->data, entry->len);
+                        break;
+                    }
+                }
+                succ = 1;
+                break;
+            }
+        }
 
                 
             // case 2: Flood to all ports except ingress
+        if(!succ) {
+            for(int i = 0; i < device_count; i++) {
+                if(&devices[i] == entry->device) continue;
+                send_packet(&devices[i], entry->data, entry->len);
+            }
+        }
         
         /*************************************
          * end of your code
@@ -273,12 +307,23 @@ void Router(){
             continue;
         }
 
-
         /*********************************
          * start of your code
          ********************************/
 
         // Forward packet based on routing table       
+        uint32_t dest_ip = ntohl(*(uint32_t *) (entry->data + 30));
+        for(int i = 0; i < rt.count; i++) {
+            if((rt.entries[i].mask & dest_ip) == rt.entries[i].dest_ip) {
+                for(int j = 0; j < device_count; j++) {
+                    if(strncmp(devices[j].name, rt.entries[i].out_dev, 31) == 0) {
+                        send_packet(&devices[j], entry->data, entry->len);
+                        break;
+                    }
+                }
+                break;
+            }
+        }
 
         /*********************************
          * end of your code
@@ -342,10 +387,25 @@ void *control_plane_thread(void *arg) {
             ********************************/
 
             // Process DV packet and update routing table
+            dv_packet_t *dv = (dv_packet_t *) (entry->data + 14);
             
             // Check if destination exists in routing table
+            int flag = 1;
+            for(int i = 0; i < rt.count; i++) {
+                if(ntohl(dv->dest_ip) == rt.entries[i].dest_ip && ntohl(dv->mask) == rt.entries[i].mask) {
+                    flag = 0;
+                    break;
+                }
+            }
             
             // Add new entry if destination not found and table not full
+            if(flag && rt.count < MAX_ROUTES) {
+                rt.entries[rt.count].dest_ip = ntohl(dv->dest_ip);
+                rt.entries[rt.count].mask = ntohl(dv->mask);
+                rt.entries[rt.count].distance = ntohl(dv->distance);
+                strcpy(rt.entries[rt.count].out_dev, entry->device->name);
+                rt.count++;
+            }
 
             /*********************************
             * end of your code
@@ -369,10 +429,25 @@ void *control_plane_thread(void *arg) {
                 // Iterate through devices
                         // Create DV packet (Tips: MAC address can be arbitrary)
                         // Send DV packet to all devices 
+            uint8_t buf[PACKET_BUF_SIZE];
+            uint16_t *type = (uint16_t *) (buf + 12);
+            uint32_t *dest_ip = (uint32_t *) (buf + 14);
+            uint32_t *mask = (uint32_t *) (buf + 18);
+            uint32_t *distance = (uint32_t *) (buf + 22);
+            *type = htons(ETH_TYPE_DV);
+            for(int i = 0; i < rt.count; i++) {
+                *dest_ip = htonl(rt.entries[i].dest_ip);
+                *mask = htonl(rt.entries[i].mask);
+                *distance = htonl(rt.entries[i].distance + 1);
+
+                for(int j = 0; j < device_count; j++) {
+                    send_packet(&devices[j], buf, 26);
+                }
+            }
 
         }
         /*********************************
-        * start of your code
+        * end of your code
         ********************************/
     }
     return NULL;

@@ -1,0 +1,13 @@
+12:22:10.172719 66:77:88:00:00:02 > 66:77:88:00:00:08, ethertype IPv4 (0x0800), length 98: (tos 0x0, ttl 64, id 27044, offset 0, flags [DF], proto ICMP (1), length 84)
+    10.0.0.1 > 10.0.0.4: ICMP echo request, id 92, seq 1, length 64
+12:22:10.236950 66:77:88:00:00:08 > 66:77:88:00:00:02, ethertype IPv4 (0x0800), length 98: (tos 0x0, ttl 64, id 14931, offset 0, flags [none], proto ICMP (1), length 84)
+    10.0.0.4 > 10.0.0.1: ICMP echo reply, id 92, seq 1, length 64
+12:22:11.197102 66:77:88:00:00:02 > 66:77:88:00:00:08, ethertype IPv4 (0x0800), length 98: (tos 0x0, ttl 64, id 27175, offset 0, flags [DF], proto ICMP (1), length 84)
+    10.0.0.1 > 10.0.0.4: ICMP echo request, id 92, seq 2, length 64
+12:22:11.261255 66:77:88:00:00:08 > 66:77:88:00:00:02, ethertype IPv4 (0x0800), length 98: (tos 0x0, ttl 64, id 14995, offset 0, flags [none], proto ICMP (1), length 84)
+    10.0.0.4 > 10.0.0.1: ICMP echo reply, id 92, seq 2, length 64
+12:22:12.220739 66:77:88:00:00:02 > 66:77:88:00:00:08, ethertype IPv4 (0x0800), length 98: (tos 0x0, ttl 64, id 27182, offset 0, flags [DF], proto ICMP (1), length 84)
+    10.0.0.1 > 10.0.0.4: ICMP echo request, id 92, seq 3, length 64
+12:22:12.284852 66:77:88:00:00:08 > 66:77:88:00:00:02, ethertype IPv4 (0x0800), length 98: (tos 0x0, ttl 64, id 15232, offset 0, flags [none], proto ICMP (1), length 84)
+    10.0.0.4 > 10.0.0.1: ICMP echo reply, id 92, seq 3, length 64
+

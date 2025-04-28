@@ -56,7 +56,7 @@ test: $(TARGET)
 	docker exec -it host4 pkill -f $(TARGET) || true
 
 	# set packet loss to be 0.1
-	docker exec -it device tc qdisc add dev device-eth3  root netem loss 10%
+	# docker exec -it device tc qdisc add dev device-eth3  root netem loss 10%
 	# cancel packet loss
 	#docker exec -it device tc qdisc del dev device-eth3 root 
 
@@ -65,7 +65,7 @@ test: $(TARGET)
 	docker exec -dit host2 bash -c "/$(TARGET) sender > /log.txt 2>&1"
 
 	# Run program in host4 as receiver  
-	docker exec -it host4 /$(TARGET) receiver
+	docker exec -it host4 bash -c "/$(TARGET) receiver > /log.txt 2>&1"
 
 	# Wait for a few seconds to allow the program to run
 	sleep 1

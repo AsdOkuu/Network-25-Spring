@@ -4,3 +4,8 @@ my-venv
 *.o
 lab4/device
 lab4/tutorial/host
+lab5/transport
+file1.txt
+file2.txt
+output1.txt
+output2.txt

@@ -201,29 +201,37 @@ int m_send(int conn_id, const void* buf, size_t len) {
 
         int complete = 1;
         for(uint32_t i = ccb->window_base; i < ccb->window_base + ccb->window_size && i < ccb->max_seq; i++) {
-            if (ccb->retrans_records[i] == 0) {
-                mtp_header_t *header = (mtp_header_t*) local_buf;
-                int payload_len;
-                if(len > (i + 1) * MTP_PAYLOAD_LEN) {
-                    payload_len = MTP_PAYLOAD_LEN;
-                } else {
-                    payload_len = len - i * MTP_PAYLOAD_LEN;
-                }
-                header->seq_num = htonl(i);
-                header->ack_flag = 0;
-                header->payload_len = htons(payload_len);
-                memcpy(header + 1, buf + i * MTP_PAYLOAD_LEN, payload_len);
-                ssize_t sent_len = sendto(ccb->udp_sock, &local_buf, sizeof(local_buf), 0,
-                                          (struct sockaddr*)&ccb->remote_addr, sizeof(ccb->remote_addr));
-                if (sent_len < 0) {
-                    fprintf(stderr, "Sendto failed");
-                    return -1;
-                }
+            if (ccb->acks_received[i] == 0) {
+                // 检查超时
+                struct timeval now;
+                gettimeofday(&now, NULL);
+                double elapsed = (now.tv_sec - ccb->timestamps[i].tv_sec) +
+                                 ((double) now.tv_usec - ccb->timestamps[i].tv_usec) / 1e6;
+                if ((ccb->timestamps[i].tv_sec == 0 && ccb->timestamps[i].tv_usec == 0) 
+                || elapsed > ccb->rtt_estimated + 4 * ccb->rtt_variation) {
+                    ccb->timestamps[i] = now;
 
-                fprintf(stderr, "Conn %d: Sent packet, seq_num: %u, payload_len: %u\n", conn_id,
-                        ntohl(header->seq_num), ntohs(header->payload_len));
+                    mtp_header_t *header = (mtp_header_t*) local_buf;
+                    int payload_len;
+                    if(len > (i + 1) * MTP_PAYLOAD_LEN) {
+                        payload_len = MTP_PAYLOAD_LEN;
+                    } else {
+                        payload_len = len - i * MTP_PAYLOAD_LEN;
+                    }
+                    header->seq_num = htonl(i);
+                    header->ack_flag = 0;
+                    header->payload_len = htons(payload_len);
+                    memcpy(header + 1, buf + i * MTP_PAYLOAD_LEN, payload_len);
+                    ssize_t sent_len = sendto(ccb->udp_sock, &local_buf, sizeof(local_buf), 0,
+                                            (struct sockaddr*)&ccb->remote_addr, sizeof(ccb->remote_addr));
+                    if (sent_len < 0) {
+                        fprintf(stderr, "Sendto failed");
+                        return -1;
+                    }
 
-                ccb->retrans_records[i] = 1;
+                    fprintf(stderr, "Conn %d: Sent packet, seq_num: %u, payload_len: %u\n", conn_id,
+                            ntohl(header->seq_num), ntohs(header->payload_len));
+                }
             }
             if (ccb->acks_received[i] == 0) {
                 complete = 0;

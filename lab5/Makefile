@@ -56,7 +56,7 @@ test: $(TARGET)
 	docker exec -it host4 pkill -f $(TARGET) || true
 
 	# set packet loss to be 0.1
-	# docker exec -it device tc qdisc add dev device-eth3  root netem loss 10%
+	docker exec -it device tc qdisc add dev device-eth3  root netem loss 10%
 	# cancel packet loss
 	#docker exec -it device tc qdisc del dev device-eth3 root 
 

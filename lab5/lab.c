@@ -99,6 +99,10 @@ static void update_rtt(ccb_t* ccb, double rtt_sample) {
     /***********************
      * start of your code
      **********************/
+    ccb->rtt_estimated = 0.875 * ccb->rtt_estimated + 0.125 * rtt_sample;
+    double rtt_delta = rtt_sample - ccb->rtt_estimated;
+    double rttv_sample = rtt_delta * rtt_delta;
+    ccb->rtt_variation = 0.75 * ccb->rtt_variation + 0.25 * rttv_sample;
 
     /***********************
      * end of your code
@@ -120,10 +124,23 @@ static void congestion_control(ccb_t* ccb, int is_timeout) {
             // 窗口减半，不小于1
             // 进入拥塞避免
             // 记录保护期开始
+        double elapse = (now.tv_sec - ccb->last_congestion.tv_sec) +
+                                 ((double) now.tv_usec - ccb->last_congestion.tv_usec) / 1e6;
+        if(elapse > ccb->rtt_estimated + 4 * ccb->rtt_variation) {
+            ccb->window_size = ccb->window_size / 2;
+            if(ccb->window_size < 1) ccb->window_size = 1;
+            ccb->congestion_state = 1;
+            ccb->last_congestion = now;
+        }
     } else {
         // ACK处理
             // 慢启动阶段：每个ACK窗口+1
             // 拥塞避免阶段：每个ACK窗口+1/window_size
+        if(ccb->congestion_state == 0) {
+            ccb->window_size++;
+        }else {
+            ccb->window_size += 1 / ccb->window_size;
+        }
     }
 
     /***********************
@@ -183,9 +200,26 @@ int m_send(int conn_id, const void* buf, size_t len) {
             uint32_t seq_num = ntohl(header->seq_num);
             ccb->acks_received[seq_num] = 1;
 
+            if(ccb->retrans_records[seq_num] <= 1) {
+                struct timeval now;
+                gettimeofday(&now, NULL);
+                double rtt_sample = (now.tv_sec - ccb->timestamps[seq_num].tv_sec) +
+                                    ((double) now.tv_usec - ccb->timestamps[seq_num].tv_usec) / 1e6;
+
+                update_rtt(ccb, rtt_sample);
+
+                // fprintf(stderr, "Failed\n");
+                // return -1;
+            }
+            congestion_control(ccb, 0);
+
             fprintf(stderr, "Conn %d: Received ACK packet, seq_num: %u\n", conn_id,
                     ntohl(header->seq_num));
+            fprintf(stderr, "Conn %d: window_size: %lf, rtt_estimated: %lf, rtt_variation: %lf\n",
+                conn_id, ccb->window_size, ccb->rtt_estimated, ccb->rtt_variation);
         }
+
+        
             
         // 滑动窗口
         // 发送分组
@@ -194,14 +228,17 @@ int m_send(int conn_id, const void* buf, size_t len) {
             // 超时或者第一次发送：构造并发送分组
             // 记录发送时间
         // 检查完成度
-        while(ccb->window_base + ccb->window_size < ccb->max_seq
+        int window_size = ccb->window_size;
+        while(ccb->window_base + window_size < ccb->max_seq
         && ccb->acks_received[ccb->window_base] == 1) {
             ccb->window_base++;
         }
 
         int complete = 1;
-        for(uint32_t i = ccb->window_base; i < ccb->window_base + ccb->window_size && i < ccb->max_seq; i++) {
+        for(uint32_t i = ccb->window_base; i < ccb->window_base + window_size && i < ccb->max_seq; i++) {
             if (ccb->acks_received[i] == 0) {
+                complete = 0;
+                
                 // 检查超时
                 struct timeval now;
                 gettimeofday(&now, NULL);
@@ -209,7 +246,9 @@ int m_send(int conn_id, const void* buf, size_t len) {
                                  ((double) now.tv_usec - ccb->timestamps[i].tv_usec) / 1e6;
                 if ((ccb->timestamps[i].tv_sec == 0 && ccb->timestamps[i].tv_usec == 0) 
                 || elapsed > ccb->rtt_estimated + 4 * ccb->rtt_variation) {
+                    ccb->retrans_records[i]++;
                     ccb->timestamps[i] = now;
+                    congestion_control(ccb, 1);
 
                     mtp_header_t *header = (mtp_header_t*) local_buf;
                     int payload_len;
@@ -232,9 +271,6 @@ int m_send(int conn_id, const void* buf, size_t len) {
                     fprintf(stderr, "Conn %d: Sent packet, seq_num: %u, payload_len: %u\n", conn_id,
                             ntohl(header->seq_num), ntohs(header->payload_len));
                 }
-            }
-            if (ccb->acks_received[i] == 0) {
-                complete = 0;
             }
         }
 

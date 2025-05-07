@@ -99,10 +99,9 @@ static void update_rtt(ccb_t* ccb, double rtt_sample) {
     /***********************
      * start of your code
      **********************/
-    ccb->rtt_estimated = 0.875 * ccb->rtt_estimated + 0.125 * rtt_sample;
     double rtt_delta = rtt_sample - ccb->rtt_estimated;
-    double rttv_sample = rtt_delta * rtt_delta;
-    ccb->rtt_variation = 0.75 * ccb->rtt_variation + 0.25 * rttv_sample;
+    ccb->rtt_estimated = 0.875 * ccb->rtt_estimated + 0.125 * rtt_sample;
+    ccb->rtt_variation = 0.75 * ccb->rtt_variation + 0.25 * fabs(rtt_delta);
 
     /***********************
      * end of your code
@@ -191,18 +190,18 @@ int m_send(int conn_id, const void* buf, size_t len) {
         char local_buf[MTP_PAYLOAD_LEN + sizeof(mtp_header_t) + 8];
         ssize_t recv_len = recvfrom(ccb->udp_sock, local_buf, sizeof(local_buf), 0, NULL, NULL);
         mtp_header_t *header = (mtp_header_t*)local_buf;
+        struct timeval now;
+        gettimeofday(&now, NULL);
         if(recv_len > 0) {
-            if(!header->ack_flag) {
-                fprintf(stderr, "Received non-ACK packet, seq_num: %u, payload_len: %u\n",
-                        ntohl(header->seq_num), ntohs(header->payload_len));
-                return -1;
-            }
+            // if(!header->ack_flag) {
+            //     fprintf(stderr, "Received non-ACK packet, seq_num: %u, payload_len: %u\n",
+            //             ntohl(header->seq_num), ntohs(header->payload_len));
+            //     return -1;
+            // }
             uint32_t seq_num = ntohl(header->seq_num);
             ccb->acks_received[seq_num] = 1;
 
             if(ccb->retrans_records[seq_num] <= 1) {
-                struct timeval now;
-                gettimeofday(&now, NULL);
                 double rtt_sample = (now.tv_sec - ccb->timestamps[seq_num].tv_sec) +
                                     ((double) now.tv_usec - ccb->timestamps[seq_num].tv_usec) / 1e6;
 
@@ -213,10 +212,10 @@ int m_send(int conn_id, const void* buf, size_t len) {
             }
             congestion_control(ccb, 0);
 
-            fprintf(stderr, "Conn %d: Received ACK packet, seq_num: %u\n", conn_id,
-                    ntohl(header->seq_num));
-            fprintf(stderr, "Conn %d: window_size: %lf, rtt_estimated: %lf, rtt_variation: %lf\n",
-                conn_id, ccb->window_size, ccb->rtt_estimated, ccb->rtt_variation);
+            // fprintf(stderr, "Conn %d: Received ACK packet, seq_num: %u\n", conn_id,
+            //         ntohl(header->seq_num));
+            // fprintf(stderr, "Conn %d: window_size: %lf, rtt_estimated: %lf, rtt_variation: %lf\n",
+            //     conn_id, ccb->window_size, ccb->rtt_estimated, ccb->rtt_variation);
         }
 
         
@@ -240,8 +239,7 @@ int m_send(int conn_id, const void* buf, size_t len) {
                 complete = 0;
                 
                 // 检查超时
-                struct timeval now;
-                gettimeofday(&now, NULL);
+                
                 double elapsed = (now.tv_sec - ccb->timestamps[i].tv_sec) +
                                  ((double) now.tv_usec - ccb->timestamps[i].tv_usec) / 1e6;
                 if ((ccb->timestamps[i].tv_sec == 0 && ccb->timestamps[i].tv_usec == 0) 
@@ -252,24 +250,20 @@ int m_send(int conn_id, const void* buf, size_t len) {
 
                     mtp_header_t *header = (mtp_header_t*) local_buf;
                     int payload_len;
-                    if(len > (i + 1) * MTP_PAYLOAD_LEN) {
-                        payload_len = MTP_PAYLOAD_LEN;
-                    } else {
-                        payload_len = len - i * MTP_PAYLOAD_LEN;
-                    }
+                    payload_len = len > (i + 1) * MTP_PAYLOAD_LEN ? MTP_PAYLOAD_LEN : len - i * MTP_PAYLOAD_LEN;
                     header->seq_num = htonl(i);
                     header->ack_flag = 0;
                     header->payload_len = htons(payload_len);
                     memcpy(header + 1, buf + i * MTP_PAYLOAD_LEN, payload_len);
-                    ssize_t sent_len = sendto(ccb->udp_sock, &local_buf, sizeof(local_buf), 0,
-                                            (struct sockaddr*)&ccb->remote_addr, sizeof(ccb->remote_addr));
-                    if (sent_len < 0) {
-                        fprintf(stderr, "Sendto failed");
-                        return -1;
-                    }
+                    sendto(ccb->udp_sock, &local_buf, sizeof(local_buf), 0,
+                                (struct sockaddr*)&ccb->remote_addr, sizeof(ccb->remote_addr));
+                    // if (sent_len < 0) {
+                    //     fprintf(stderr, "Sendto failed");
+                    //     return -1;
+                    // }
 
-                    fprintf(stderr, "Conn %d: Sent packet, seq_num: %u, payload_len: %u\n", conn_id,
-                            ntohl(header->seq_num), ntohs(header->payload_len));
+                    // fprintf(stderr, "Conn %d: Sent packet, seq_num: %u, payload_len: %u\n", conn_id,
+                    //         ntohl(header->seq_num), ntohs(header->payload_len));
                 }
             }
         }
@@ -347,25 +341,25 @@ int m_recv(int conn_id, void* buf, size_t len) {
         ssize_t recv_len = recvfrom(ccb->udp_sock, local_buf, sizeof(local_buf), 0, NULL, NULL);
         mtp_header_t *header = (mtp_header_t*)local_buf;
         if(recv_len > 0 && ccb->recv_records[ntohl(header->seq_num)] == 0) {
-            if(header->ack_flag) {
-                fprintf(stderr, "Received ACK packet");
-                return -1;
-            }
+            // if(header->ack_flag) {
+            //     fprintf(stderr, "Received ACK packet");
+            //     return -1;
+            // }
             uint32_t seq_num = ntohl(header->seq_num);
             uint16_t payload_len = ntohs(header->payload_len);
             memcpy(buf + seq_num * MTP_PAYLOAD_LEN, local_buf + sizeof(mtp_header_t), payload_len);
             ccb->recv_records[seq_num] = 1;
             ccb->recv_progress++;
 
-            fprintf(stderr, "Conn %d: Received packet, seq_num: %u, payload_len: %u\n", conn_id,
-                    ntohl(header->seq_num), ntohs(header->payload_len));
+            // fprintf(stderr, "Conn %d: Received packet, seq_num: %u, payload_len: %u\n", conn_id,
+            //         ntohl(header->seq_num), ntohs(header->payload_len));
 
             build_ack_packet(header, header->seq_num);
             sendto(ccb->udp_sock, local_buf, sizeof(mtp_header_t), 0,
                    (struct sockaddr*)&ccb->remote_addr, sizeof(ccb->remote_addr));
 
-            fprintf(stderr, "Conn %d: Sent ACK packet, seq_num: %u\n", conn_id,
-                    ntohl(header->seq_num));
+            // fprintf(stderr, "Conn %d: Sent ACK packet, seq_num: %u\n", conn_id,
+            //         ntohl(header->seq_num));
         }
 
         // 完成度检查
